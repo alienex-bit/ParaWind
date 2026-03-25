@@ -1,5 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import '../models/wind_band.dart';
 
 enum SpeedUnit { kph, mph, knots, mps }
 
@@ -10,6 +12,7 @@ enum HeightUnit { meters, feet }
 enum PressureUnit { hpa, mbar }
 
 enum WeatherModel { ukv, ecmwf, icon }
+
 
 extension WeatherModelExtension on WeatherModel {
   String get displayName {
@@ -220,5 +223,37 @@ class WeatherSettings {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('weather_model', selectedModel.value.index);
     });
+  }
+}
+
+
+class WindBandSettings {
+  static final ValueNotifier<List<WindBand>> currentBands =
+      ValueNotifier<List<WindBand>>(defaultBands);
+
+  static const List<WindBand> defaultBands = [
+    WindBand(min: 0, max: 20, label: 'PRIME', color: Color(0xFF00E676)), // Green
+    WindBand(min: 20, max: 99, label: 'BLOWN', color: Color(0xFFFF1744)), // Red
+  ];
+
+  static Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? bandsJson = prefs.getString('wind_bands');
+    if (bandsJson != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(bandsJson);
+        currentBands.value = decoded.map((j) => WindBand.fromJson(j)).toList();
+      } catch (e) {
+        debugPrint('Error loading wind bands: $e');
+        currentBands.value = defaultBands;
+      }
+    }
+  }
+
+  static Future<void> saveBands(List<WindBand> bands) async {
+    currentBands.value = bands;
+    final prefs = await SharedPreferences.getInstance();
+    final String encoded = jsonEncode(bands.map((b) => b.toJson()).toList());
+    await prefs.setString('wind_bands', encoded);
   }
 }

@@ -1,11 +1,7 @@
-﻿import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import '../models/site.dart';
 import '../models/weather_data.dart';
-import '../models/pilot_report.dart';
 import '../services/flight_logic.dart';
-import '../services/pilot_report_service.dart';
 import '../utils/unit_converter.dart';
 import 'live_wind_screen.dart';
 
@@ -13,13 +9,14 @@ class SiteDetailScreen extends StatelessWidget {
   final Site site;
   final List<WeatherData> forecast;
   final DateTime selectedDate;
-  final _reportService = PilotReportService();
-  SiteDetailScreen({
+
+  const SiteDetailScreen({
     super.key,
     required this.site,
     required this.forecast,
     required this.selectedDate,
   });
+
   @override
   Widget build(BuildContext context) {
     if (forecast.isEmpty) {
@@ -66,28 +63,63 @@ class SiteDetailScreen extends StatelessWidget {
               ),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => _showReportDialog(context),
-            label: const Text('Add Report'),
-            icon: const Icon(Icons.add_comment),
-            backgroundColor: Colors.blueAccent,
-          ),
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (evaluation.notes.contains("Hill in cloud"))
+                  if (evaluation.primaryWord == 'CLAGGED IN')
                     _buildCloudHazardBanner(context),
-                  if (evaluation.notes.any(
-                    (n) => n.contains("thunder") || n.contains("Storm"),
-                  ))
+                  if (evaluation.status == FlightStatus.storm)
                     _buildThunderHazardBanner(context),
-                  _buildCurrentConditionsCard(context, currentData, evaluation),
-                  const SizedBox(height: 24),
-                  _buildPilotReportsSection(context),
-                  const SizedBox(height: 24),
+                  // Risk score clickable box
+                  GestureDetector(
+                    onTap: () => _showRiskBreakdown(context, evaluation),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: evaluation.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: evaluation.color.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Icon(Icons.shield_outlined, size: 18, color: evaluation.color),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  evaluation.primaryWord,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                    color: evaluation.color,
+                                  ),
+                                ),
+                                Text(
+                                  'Risk score: ${evaluation.riskScore}/100  —  tap for breakdown',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: evaluation.color.withValues(alpha: 0.75),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(Icons.info_outline, size: 14, color: evaluation.color),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -102,7 +134,7 @@ class SiteDetailScreen extends StatelessWidget {
                         dayName,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade400,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -220,632 +252,55 @@ class SiteDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCurrentConditionsCard(
-    BuildContext context,
-    WeatherData wd,
-    FlightEvaluation evaluation,
-  ) {
-    final now = DateTime.now();
-    final direction = UnitSettings.degreesToCompass(wd.windDirection);
-    final speed = UnitSettings.convertKmh(wd.windSpeed).round();
-    final gusts = UnitSettings.convertKmh(wd.windGusts).round();
-    final boxColor = evaluation.color;
-    final speedUnit = UnitSettings.unitString;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: boxColor.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: boxColor.withValues(alpha: 0.5), width: 2),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'CURRENT CONDITIONS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  evaluation.verdict.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}\n$speed $speedUnit\nG $gusts $speedUnit',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            children: [
-              Transform.rotate(
-                angle: (wd.windDirection + 180) * (3.14159 / 180),
-                child: const Icon(
-                  Icons.arrow_upward,
-                  size: 32,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                direction,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPilotReportsSection(BuildContext context) {
-    return StreamBuilder<List<PilotReport>>(
-      stream: _reportService.getRecentReports(
-        site.id,
-        targetDate: selectedDate,
-      ),
-      builder: (context, snapshot) {
-        final reports = snapshot.data ?? [];
-        final count = reports.length;
-        final boxColor = count > 0 ? Colors.purpleAccent : Colors.white10;
-        final textColor = count > 0 ? Colors.white : Colors.white38;
-        return InkWell(
-          onTap: count > 0
-              ? () => _showDetailedReportsDialog(context, reports)
-              : null,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: boxColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: boxColor.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  count > 0 ? Icons.comment : Icons.comment_outlined,
-                  color: boxColor,
-                  size: 18,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    count == 0
-                        ? 'No site reports for ${site.name}'
-                        : '$count ${count == 1 ? 'report' : 'reports'} for ${site.name}',
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: count > 0
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                if (count > 0)
-                  Icon(
-                    Icons.chevron_right,
-                    color: Theme.of(context).dividerColor,
-                    size: 20,
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showDetailedReportsDialog(
-    BuildContext context,
-    List<PilotReport> reports,
-  ) {
-    showModalBottomSheet(
+  void _showRiskBreakdown(BuildContext context, FlightEvaluation eval) {
+    showDialog(
       context: context,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: const Text('RISK SCORE BREAKDOWN',
+            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 16)),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildScoreRow('Direction Penalty', eval.dirScore, 35),
+            _buildScoreRow('Wind Speed Penalty', eval.speedScore, 30),
+            _buildScoreRow('Gust Penalty', eval.gustScore, 20),
+            _buildScoreRow('Rain/Moisture Penalty', eval.rainScore, 15),
+            _buildScoreRow('Low Cloud Penalty', eval.cloudScore, 15),
+            _buildScoreRow('Instability Penalty', eval.instabilityScore, 10),
+            const Divider(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'PILOT REPORTS',
-                  style: TextStyle(
-                    color: Theme.of(context).textTheme.bodyLarge?.color,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.close,
-                    color: Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
+                const Text('TOTAL RISK SCORE', style: TextStyle(fontWeight: FontWeight.w900)),
+                Text('${eval.riskScore}/100',
+                    style: TextStyle(fontWeight: FontWeight.w900, color: eval.color, fontSize: 18)),
               ],
-            ),
-            const SizedBox(height: 16),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: reports.length,
-                itemBuilder: (context, index) =>
-                    _buildReportCard(context, reports[index]),
-              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildReportCard(BuildContext context, PilotReport report) {
-    final timeStr =
-        '${report.timestamp.hour.toString().padLeft(2, '0')}:${report.timestamp.minute.toString().padLeft(2, '0')}';
-    final directionStr = UnitSettings.degreesToCompass(report.windDirection);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                report.userName,
-                style: TextStyle(
-                  color: Colors.blueAccent,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              Text(
-                timeStr,
-                style: TextStyle(
-                  color: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.color?.withValues(alpha: 0.5),
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                Icons.explore_outlined,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-                size: 14,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '$directionStr (${report.windDirection.round()})\n${report.windSpeedMin.round()}-${report.windSpeedMax.round()} ${UnitSettings.unitString}',
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(
-                Icons.wb_sunny_outlined,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-                size: 14,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'Cloud: ${report.cloudCover}',
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-          if (report.observations.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              report.observations,
-              style: TextStyle(
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-                fontSize: 13,
-              ),
-            ),
-          ],
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CLOSE')),
         ],
       ),
     );
   }
 
-  void _showReportDialog(BuildContext context) {
-    String selectedDirectionPoint = 'N';
-    int selectedMin = 10;
-    int selectedMax = 15;
-    String selectedCloudCover = UnitSettings.cloudCoverOctas[0];
-    final observationsController = TextEditingController();
-    bool isSubmitting = false;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'SUBMIT PILOT REPORT',
-                        style: TextStyle(
-                          color: Theme.of(context).textTheme.bodyLarge?.color,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.close,
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'WIND DIRECTION',
-                              style: TextStyle(
-                                color: Colors.blueAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            SizedBox(
-                              height: 120,
-                              child: CupertinoPicker(
-                                itemExtent: 40,
-                                scrollController: FixedExtentScrollController(
-                                  initialItem: 0,
-                                ),
-                                onSelectedItemChanged: (index) => setModalState(
-                                  () => selectedDirectionPoint =
-                                      UnitSettings.compassPoints[index],
-                                ),
-                                children: UnitSettings.compassPoints
-                                    .map(
-                                      (p) => Center(
-                                        child: Text(
-                                          p,
-                                          style: TextStyle(
-                                            color: Theme.of(
-                                              context,
-                                            ).textTheme.bodyLarge?.color,
-                                            fontSize: 18,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'CLOUD COVER',
-                              style: TextStyle(
-                                color: Colors.blueAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            SizedBox(
-                              height: 120,
-                              child: CupertinoPicker(
-                                itemExtent: 40,
-                                scrollController: FixedExtentScrollController(
-                                  initialItem: 0,
-                                ),
-                                onSelectedItemChanged: (index) => setModalState(
-                                  () => selectedCloudCover =
-                                      UnitSettings.cloudCoverOctas[index],
-                                ),
-                                children: UnitSettings.cloudCoverOctas
-                                    .map(
-                                      (c) => Center(
-                                        child: Text(
-                                          c.split(' - ').first,
-                                          style: TextStyle(
-                                            color: Theme.of(
-                                              context,
-                                            ).textTheme.bodyLarge?.color,
-                                            fontSize: 18,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'MIN SPEED',
-                              style: TextStyle(
-                                color: Colors.blueAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            SizedBox(
-                              height: 120,
-                              child: CupertinoPicker(
-                                itemExtent: 40,
-                                scrollController: FixedExtentScrollController(
-                                  initialItem: 10,
-                                ),
-                                onSelectedItemChanged: (index) =>
-                                    setModalState(() => selectedMin = index),
-                                children: List.generate(
-                                  100,
-                                  (i) => Center(
-                                    child: Text(
-                                      '$i',
-                                      style: TextStyle(
-                                        color: Theme.of(
-                                          context,
-                                        ).textTheme.bodyLarge?.color,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'MAX SPEED',
-                              style: TextStyle(
-                                color: Colors.blueAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            SizedBox(
-                              height: 120,
-                              child: CupertinoPicker(
-                                itemExtent: 40,
-                                scrollController: FixedExtentScrollController(
-                                  initialItem: 15,
-                                ),
-                                onSelectedItemChanged: (index) =>
-                                    setModalState(() => selectedMax = index),
-                                children: List.generate(
-                                  100,
-                                  (i) => Center(
-                                    child: Text(
-                                      '$i',
-                                      style: TextStyle(
-                                        color: Theme.of(
-                                          context,
-                                        ).textTheme.bodyLarge?.color,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'OBSERVATIONS (OPTIONAL)',
-                    style: TextStyle(
-                      color: Colors.blueAccent,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: observationsController,
-                    style: TextStyle(
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'e.g. Smooth, bumpy, busy take-off...',
-                      hintStyle: TextStyle(
-                        color: Theme.of(context).dividerColor,
-                      ),
-                      filled: true,
-                      fillColor: Theme.of(context).dividerColor,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              setModalState(() => isSubmitting = true);
-                              final user = FirebaseAuth.instance.currentUser;
-                              final report = PilotReport(
-                                siteId: site.id,
-                                userId: user?.uid ?? 'anonymous',
-                                userName:
-                                    user?.email?.split('@').first ??
-                                    'Guest Pilot',
-                                windDirection: UnitSettings.compassToDegrees(
-                                  selectedDirectionPoint,
-                                ),
-                                windSpeedMin: selectedMin.toDouble(),
-                                windSpeedMax: selectedMax.toDouble(),
-                                cloudCover: selectedCloudCover,
-                                observations: observationsController.text,
-                                timestamp: DateTime.now(),
-                              );
-                              // Pop immediately to return to site detail page
-                              Navigator.pop(context);
-                              // Save in background and show notification
-                              _reportService
-                                  .saveReport(report)
-                                  .then((_) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Report submitted successfully!',
-                                          ),
-                                          backgroundColor: Colors.green,
-                                          duration: Duration(seconds: 2),
-                                        ),
-                                      );
-                                    }
-                                  })
-                                  .catchError((e) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Failed to submit: $e'),
-                                          backgroundColor: Colors.redAccent,
-                                        ),
-                                      );
-                                    }
-                                  });
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: isSubmitting
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Theme.of(
-                                  context,
-                                ).textTheme.bodyLarge?.color,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              'SUBMIT REPORT',
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                    ),
-                  ),
-                  SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-                ],
-              ),
-            ),
-          ),
-        ),
+  Widget _buildScoreRow(String label, int score, int max) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13)),
+          Text('$score',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: score > 0 ? Colors.orangeAccent : Colors.grey)),
+        ],
       ),
     );
   }
+
 
   Widget _buildHourlyGrid(BuildContext context, List<WeatherData> forecast) {
     final timeline = FlightLogic.calculateTimeline(
@@ -855,8 +310,9 @@ class SiteDetailScreen extends StatelessWidget {
     );
     final displayHours = timeline.where((h) {
       if (h.data == null) return false;
-      return FlightLogic.isLegalFlyingHour(DateTime.parse(h.data!.time), site);
+      return FlightLogic.isLegalFlyingHour(DateTime.parse(h.data!.time), site, wd: h.data);
     }).toList();
+
     if (displayHours.isEmpty) {
       return Card(
         color: Theme.of(context).colorScheme.surface,
@@ -869,66 +325,110 @@ class SiteDetailScreen extends StatelessWidget {
           child: Center(
             child: Text(
               "No flyable hours for this day.",
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(
+                color: Colors.grey,
+              ),
             ),
           ),
         ),
       );
     }
+    
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tableHeaderColor = isDark
+        ? Colors.white.withValues(alpha: 0.4)
+        : colorScheme.onSurfaceVariant;
+    final tableBackgroundColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : colorScheme.surfaceContainerHigh;
+    final tableBorderColor = isDark
+        ? Colors.white.withValues(alpha: 0.1)
+        : colorScheme.outline.withValues(alpha: 0.18);
+    final rowBorderColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : colorScheme.outline.withValues(alpha: 0.1);
+    final valueTextColor = colorScheme.onSurface;
+    final mutedValueColor = valueTextColor.withValues(alpha: 0.6);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 12.0, bottom: 8.0),
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            'Hourly Forecast'.toUpperCase(),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: tableHeaderColor,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.purple.withValues(alpha: 0.1),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.5), width: 3),
+          ),
           child: Row(
             children: [
-              const SizedBox(width: 4), // Space for status line
+              const SizedBox(width: 4), // Match the 4dp indicator stripe
               Expanded(
-                flex: 2,
-                child: Text(
-                  'TIME',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white.withValues(alpha: 0.4),
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  'WIND & GUSTS',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white.withValues(alpha: 0.4),
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'DIRECTION',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white.withValues(alpha: 0.4),
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'RAIN %',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white.withValues(alpha: 0.4),
-                    letterSpacing: 1.0,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 4), // aligns with the colour bar in data rows
+                      Expanded(
+                        child: Text(
+                          'TIME',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.purpleAccent.shade100,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'WIND / GUST',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.purpleAccent.shade100,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'DIR',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.purpleAccent.shade100,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          'RAIN %',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.purpleAccent.shade100,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -937,156 +437,165 @@ class SiteDetailScreen extends StatelessWidget {
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            color: tableBackgroundColor,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+            border: Border(
+              left: BorderSide(color: tableBorderColor),
+              right: BorderSide(color: tableBorderColor),
+              bottom: BorderSide(color: tableBorderColor),
+            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
-            children: displayHours.map((h) {
-              final wd = h.data!;
-              final time = wd.time.split('T').last.substring(0, 5);
-              final eval = FlightLogic.evaluateCondition(wd, site);
-              final speed = UnitSettings.convertKmh(wd.windSpeed).round();
-              final gusts = UnitSettings.convertKmh(wd.windGusts).round();
-              final rainColor = wd.precipitationProbability > 30
-                  ? Colors.blueAccent
-                  : Colors.white;
-              final isLast = displayHours.last == h;
-              return Container(
-                decoration: BoxDecoration(
-                  border: isLast
-                      ? null
-                      : Border(
-                          bottom: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.05),
-                          ),
-                        ),
-                ),
-                child: IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      // Vertical status indicator
-                      Container(width: 4, color: eval.color),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                          child: Row(
-                            children: [
-                              // Time
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  time,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    fontSize: 14,
+            children: (() {
+              final List<Widget> items = [];
+              final firstWd = displayHours.first.data!;
+              DateTime? sunrise, sunset;
+              if (firstWd.sunrise != null) sunrise = DateTime.parse(firstWd.sunrise!);
+              if (firstWd.sunset != null) sunset = DateTime.parse(firstWd.sunset!);
+
+              for (int i = 0; i < displayHours.length; i++) {
+                final h = displayHours[i];
+                final wd = h.data!;
+                final time = wd.time.split('T').last.substring(0, 5);
+                final hourInt = int.parse(time.split(':')[0]);
+                final speed = UnitSettings.convertKmh(wd.windSpeed).round();
+                final gusts = UnitSettings.convertKmh(wd.windGusts).round();
+                final rainColor = FlightLogic.getColorForRain(wd.precipitationProbability);
+                final dirColor = h.isDirOptimal ? Colors.greenAccent : Colors.redAccent;
+                final windColor = FlightLogic.getColorForSpeed(speed);
+                final gustColor = FlightLogic.getColorForSpeed(gusts);
+                
+                final isLast = i == displayHours.length - 1;
+
+if (sunrise != null && hourInt == sunrise.hour) {
+                  items.add(_buildSolarStrip(
+                    context, 
+                    'Sunrise (${sunrise.hour.toString().padLeft(2, '0')}:${sunrise.minute.toString().padLeft(2, '0')})', 
+                    Icons.wb_sunny_outlined, 
+                    Colors.orangeAccent,
+                    rowBorderColor,
+                  ));
+                }
+
+                items.add(Container(
+                  decoration: BoxDecoration(
+                    border: isLast && (sunset == null || sunset.hour != hourInt)
+                        ? null
+                        : Border(bottom: BorderSide(color: rowBorderColor)),
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      children: [
+                        Container(width: 4, color: h.color),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    time,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      color: valueTextColor,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              // Wind
-                              Expanded(
-                                flex: 3,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.air,
-                                      size: 14,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.4,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    RichText(
-                                      text: TextSpan(
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w900,
-                                          color: Colors.white,
-                                        ),
-                                        children: [
-                                          TextSpan(text: '$speed'),
-                                          TextSpan(
-                                            text: ' / $gusts',
-                                            style: TextStyle(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.5,
+                                Expanded(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.air, size: 14, color: mutedValueColor),
+                                      const SizedBox(width: 6),
+                                      RichText(
+                                        text: TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: '$speed',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: windColor,
                                               ),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
                                             ),
-                                          ),
-                                        ],
+                                            TextSpan(
+                                              text: ' / ',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: mutedValueColor,
+                                              ),
+                                            ),
+                                            TextSpan(
+                                              text: '$gusts',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: gustColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              // Direction
-                              Expanded(
-                                flex: 2,
-                                child: Row(
-                                  children: [
-                                    Transform.rotate(
-                                      angle:
-                                          (wd.windDirection + 180) *
-                                          (3.14159 / 180),
-                                      child: const Icon(
-                                        Icons.navigation_rounded,
-                                        size: 14,
-                                        color: Colors.white,
+                                Expanded(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Transform.rotate(
+                                        angle: (wd.windDirection + 180) * (3.14159 / 180),
+                                        child: Icon(Icons.arrow_upward, size: 14, color: dirColor),
                                       ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      UnitSettings.degreesToCompass(
-                                        wd.windDirection,
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        UnitSettings.degreesToCompass(wd.windDirection),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: dirColor,
+                                        ),
                                       ),
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              // Rain
-                              Expanded(
-                                flex: 2,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Icon(
-                                      Icons.water_drop_rounded,
-                                      size: 12,
-                                      color: rainColor.withValues(alpha: 0.7),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${wd.precipitationProbability}%',
-                                      style: TextStyle(
-                                        color: rainColor,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 13,
+                                Expanded(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Icon(Icons.water_drop_rounded, size: 12, color: rainColor),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${wd.precipitationProbability}%',
+                                        style: TextStyle(color: rainColor, fontWeight: FontWeight.w900, fontSize: 13),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }).toList(),
+                ));
+
+                if (sunset != null && hourInt == sunset.hour) {
+                  items.add(_buildSolarStrip(
+                    context, 
+                    'Sunset (${sunset.hour.toString().padLeft(2, '0')}:${sunset.minute.toString().padLeft(2, '0')})', 
+                    Icons.nights_stay_outlined, 
+                    Colors.blueAccent,
+                    rowBorderColor,
+                  ));
+                }
+              }
+              return items;
+            })(),
           ),
         ),
       ],
@@ -1098,15 +607,14 @@ class SiteDetailScreen extends StatelessWidget {
     WeatherData wd,
     String unitStr,
   ) {
-    final cbMeters = FlightLogic.calculateCloudbase(
-      wd.temperature,
-      wd.dewPoint,
-    );
-    final cloudbase = UnitSettings.convertHeight(cbMeters);
+    final cbAgl = FlightLogic.calculateCloudbase(wd.temperature, wd.dewPoint);
+    final cbMsl = cbAgl + site.elevation;
+    final clearance = cbMsl - site.takeOffHeight;
+    final cloudbaseAglDisplay = UnitSettings.convertHeight(clearance);
+    final cloudbaseMslDisplay = UnitSettings.convertHeight(cbMsl);
     final toh = UnitSettings.convertHeight(site.takeOffHeight.toDouble());
     final pressure = UnitSettings.convertPressure(wd.surfacePressure);
-    final pressureStr =
-        '${pressure.toStringAsFixed(1)} ${UnitSettings.pressureUnitString}';
+    final pressureStr = '${pressure.toStringAsFixed(1)} ${UnitSettings.pressureUnitString}';
     String tideSection = 'N/A';
     if (site.id == 'rhossili' || site.id == 'southerndown') {
       tideSection = _getTideTimes();
@@ -1132,56 +640,21 @@ class SiteDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                _buildConditionRow(
-                  context,
-                  'Take Off Height',
-                  '${toh.round()} ${UnitSettings.heightUnitString}',
-                ),
-                _buildConditionRow(
-                  context,
-                  'Cloud Base',
-                  '${cloudbase.round()} ${UnitSettings.heightUnitString}',
-                ),
+                _buildConditionRow(context, 'Take Off Height', '${toh.round()} ${UnitSettings.heightUnitString}'),
+                _buildConditionRow(context, 'Cloudbase MSL', '${cloudbaseMslDisplay.round()} ${UnitSettings.heightUnitString}'),
+                _buildConditionRow(context, 'Clearance above site', '${cloudbaseAglDisplay.round()} ${UnitSettings.heightUnitString}'),
                 _buildConditionRow(context, 'Pressure', pressureStr),
-                _buildConditionRow(
-                  context,
-                  'UV Index',
-                  wd.uvIndex.toStringAsFixed(1),
-                ),
+                _buildConditionRow(context, 'UV Index', wd.uvIndex.toStringAsFixed(1)),
                 _buildConditionRow(context, 'Cloud Cover', '${wd.cloudCover}%'),
                 if (site.id == 'rhossili' || site.id == 'southerndown')
                   _buildConditionRow(context, 'Tide Status', tideSection),
                 Divider(color: Theme.of(context).dividerColor, height: 24),
-                _buildConditionRow(
-                  context,
-                  'Temperature',
-                  '${wd.temperature.toStringAsFixed(1)}°C',
-                ),
-                _buildConditionRow(
-                  context,
-                  'Dew Point',
-                  '${wd.dewPoint.toStringAsFixed(1)}°C',
-                ),
-                _buildConditionRow(
-                  context,
-                  'Visibility',
-                  '${(wd.visibility / 1000).toStringAsFixed(1)} km',
-                ),
-                _buildConditionRow(
-                  context,
-                  'Humidity',
-                  '${wd.relativeHumidity}%',
-                ),
-                _buildConditionRow(
-                  context,
-                  'CAPE (Energy)',
-                  '${wd.cape.round()} J/kg',
-                ),
-                _buildConditionRow(
-                  context,
-                  'Lifted Index',
-                  wd.liftedIndex.toStringAsFixed(1),
-                ),
+                _buildConditionRow(context, 'Temperature', '${wd.temperature.toStringAsFixed(1)}°C'),
+                _buildConditionRow(context, 'Dew Point', '${wd.dewPoint.toStringAsFixed(1)}°C'),
+                _buildConditionRow(context, 'Visibility', '${(wd.visibility / 1000).toStringAsFixed(1)} km'),
+                _buildConditionRow(context, 'Humidity', '${wd.relativeHumidity}%'),
+                _buildConditionRow(context, 'CAPE (Energy)', '${wd.cape.round()} J/kg'),
+                _buildConditionRow(context, 'Lifted Index', wd.liftedIndex.toStringAsFixed(1)),
               ],
             ),
           ),
@@ -1191,9 +664,6 @@ class SiteDetailScreen extends StatelessWidget {
   }
 
   String _getTideTimes() {
-    // Rhossili/Southerdown Tide Times for March 2, 2026
-    // High: 05:28 & 18:03
-    // Low: 11:54
     return 'H: 05:28, 18:03 | L: 11:54';
   }
 
@@ -1207,16 +677,41 @@ class SiteDetailScreen extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
+                color: Theme.of(context).textTheme.bodySmall?.color,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
           Text(
             value,
             style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.blueAccent,
+              fontWeight: FontWeight.w900,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSolarStrip(BuildContext context, String label, IconData icon, Color color, Color borderColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.2), // More solid but still transparent
+        border: Border(bottom: BorderSide(color: color.withValues(alpha: 0.4))), // Contrasting border
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color), // High contrast icon
+          const SizedBox(width: 8),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: color, // High contrast text
+              letterSpacing: 1.2,
             ),
           ),
         ],

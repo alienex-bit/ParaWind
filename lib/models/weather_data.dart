@@ -1,4 +1,4 @@
-﻿class WeatherData {
+class WeatherData {
   final String time;
   final double temperature;
   final double windSpeed; // km/h
@@ -15,6 +15,9 @@
   final double uvIndex;
   final double cape; // J/kg
   final double liftedIndex; //
+  final String? sunrise; // ISO string
+  final String? sunset;  // ISO string
+
   WeatherData({
     required this.time,
     required this.temperature,
@@ -32,8 +35,15 @@
     required this.uvIndex,
     required this.cape,
     required this.liftedIndex,
+    this.sunrise,
+    this.sunset,
   });
-  factory WeatherData.fromJson(Map<String, dynamic> hourlyJson, int index) {
+  factory WeatherData.fromJson(
+    Map<String, dynamic> hourlyJson,
+    int index, {
+    String? sunrise,
+    String? sunset,
+  }) {
     return WeatherData(
       time: hourlyJson['time'][index],
       temperature: _toDouble(_getValue(hourlyJson, 'temperature_2m', index)),
@@ -59,6 +69,8 @@
       uvIndex: _toDouble(_getValue(hourlyJson, 'uv_index', index)),
       cape: _toDouble(_getValue(hourlyJson, 'cape', index)),
       liftedIndex: _toDouble(_getValue(hourlyJson, 'lifted_index', index)),
+      sunrise: sunrise,
+      sunset: sunset,
     );
   }
   static dynamic _getValue(Map<String, dynamic> json, String key, int index) {

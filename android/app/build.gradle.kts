@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.steve.weather_app"
+    namespace = "com.alienexbit.parawind"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.steve.weather_app"
+        applicationId = "com.alienexbit.parawind"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/site.dart';
 import '../models/weather_data.dart';
@@ -45,6 +45,7 @@ class WeatherApi {
     final uri = Uri.parse(
       '$baseUrl?latitude=$lats&longitude=$lons'
       '&hourly=temperature_2m,precipitation_probability,cloudcover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dewpoint_2m,weathercode,precipitation,visibility,relative_humidity_2m,surface_pressure,uv_index,cape,lifted_index'
+      '&daily=sunrise,sunset'
       '&timezone=Europe%2FLondon$modelParam',
     );
     final response = await http.get(uri);
@@ -57,13 +58,15 @@ class WeatherApi {
       if (json is List) {
         for (int s = 0; s < sites.length; s++) {
           final hourly = json[s]['hourly'];
-          results[sites[s].id] = _parseHourly(hourly, now);
+          final daily = json[s]['daily'];
+          results[sites[s].id] = _parseHourly(hourly, daily, now);
           _cache[sites[s].id] = results[sites[s].id]!;
         }
       } else {
         // Single location response returns a JSON object
         final hourly = json['hourly'];
-        results[sites[0].id] = _parseHourly(hourly, now);
+        final daily = json['daily'];
+        results[sites[0].id] = _parseHourly(hourly, daily, now);
         _cache[sites[0].id] = results[sites[0].id]!;
       }
       return results;
@@ -72,13 +75,37 @@ class WeatherApi {
     }
   }
 
-  List<WeatherData> _parseHourly(dynamic hourly, DateTime now) {
+  List<WeatherData> _parseHourly(dynamic hourly, dynamic daily, DateTime now) {
     if (hourly == null) return [];
     final List<dynamic> times = hourly['time'];
+    
+    // Create a map of date -> {sunrise, sunset}
+    final Map<String, Map<String, String>> dailySolar = {};
+    if (daily != null && daily['time'] != null) {
+      final List<dynamic> dTimes = daily['time'];
+      final List<dynamic> dSunrise = daily['sunrise'];
+      final List<dynamic> dSunset = daily['sunset'];
+      for (int i = 0; i < dTimes.length; i++) {
+        dailySolar[dTimes[i]] = {
+          'sunrise': dSunrise[i],
+          'sunset': dSunset[i],
+        };
+      }
+    }
+
     List<WeatherData> forecasts = [];
     for (int i = 0; i < times.length; i++) {
       try {
-        final data = WeatherData.fromJson(hourly, i);
+        final timeStr = times[i] as String;
+        final dateKey = timeStr.substring(0, 10);
+        final solar = dailySolar[dateKey];
+
+        final data = WeatherData.fromJson(
+          hourly, 
+          i,
+          sunrise: solar?['sunrise'],
+          sunset: solar?['sunset'],
+        );
         final dataTime = DateTime.parse(data.time);
         // Include all data for the current day (starting from 00:00)
         // and all future data.

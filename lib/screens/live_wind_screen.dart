@@ -118,7 +118,7 @@ class _LiveWindScreenState extends State<LiveWindScreen> {
         TileLayer(
           urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
           subdomains: const ['a', 'b', 'c'],
-          userAgentPackageName: 'com.example.weather_app',
+          userAgentPackageName: 'com.alienexbit.parawind',
         ),
       ],
     );
