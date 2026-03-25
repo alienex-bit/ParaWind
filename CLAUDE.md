@@ -24,7 +24,7 @@ flutter test test/some_test.dart
 
 ## Architecture
 
-**Entry point:** `lib/main.dart` initialises Firebase, loads user settings, and routes to `DisclaimerScreen` before `HomeScreen`.
+**Entry point:** `lib/main.dart` loads user settings, and routes to `DisclaimerScreen` before `HomeScreen`.
 
 **Data flow:**
 1. `WeatherApi` fetches hourly forecasts from Open-Meteo (10-minute cache) for each site in `SitesData`
@@ -43,7 +43,7 @@ flutter test test/some_test.dart
 ## External Dependencies
 
 - **Open-Meteo** – free weather API, no key required
-- **Firebase Core + Firestore** – Firestore used for (future) data; `lib/config/firebase_options.dart` holds web config; Android uses `google-services.json`
+
 
 ## Settings & State
 

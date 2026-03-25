@@ -44,5 +44,3 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Firebase config files - contain API keys, do not commit
-/android/app/google-services.json

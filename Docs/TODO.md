@@ -38,14 +38,6 @@ static int _toInt(dynamic val) {
 
 ---
 
-### [P1-C] `main.dart` L27 — Custom `kIsWeb` shadows Flutter's, may be wrong on Dart 3+
-**Severity: High**
-`const kIsWeb = bool.fromEnvironment('dart.library.js_util')` is defined locally, shadowing Flutter's built-in `kIsWeb` (from `package:flutter/foundation.dart`). On Dart 3+, Flutter uses `dart.library.js_interop`, so this custom version may return `false` on web, preventing Firebase web initialisation.
-
-**Fix:** Delete line 27 entirely. Flutter's `kIsWeb` is already available via `package:flutter/material.dart`.
-
----
-
 ### [P1-D] `daily_summary_screen.dart` L23/55 — `_errorMessage` not cleared on successful retry
 **Severity: Medium**
 `_errorMessage` is set in the `catch` block but never cleared in the `try` success path. After a failure, pulling to refresh and succeeding still shows the error banner.
@@ -210,7 +202,7 @@ A new `GenerativeModel` instance is created on each `askPilotAssistant` call. Sh
 |----|------|-------|----------|
 | P1-A | `ai_service.dart` | Wind speed units mismatch in AI prompt | High |
 | P1-B | `weather_data.dart` | Unsafe `int` cast crashes on `double` from API | High |
-| P1-C | `main.dart` | Custom `kIsWeb` shadows Flutter's, wrong on Dart 3+ | High |
+
 | P1-D | `daily_summary_screen.dart` | Error message not cleared on successful retry | Medium |
 | P1-E | `home_screen.dart` | API errors silently swallowed, no user feedback | Medium |
 | P2-A | `weather_api.dart` | No HTTP timeout | Medium |

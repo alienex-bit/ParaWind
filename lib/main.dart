@@ -1,21 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'screens/disclaimer_screen.dart';
 import 'utils/unit_converter.dart';
-import 'config/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    if (kIsWeb) {
-      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    } else {
-      await Firebase.initializeApp();
-    }
-    debugPrint("Firebase initialized successfully");
-  } catch (e) {
-    debugPrint("Firebase initialization error: $e");
-  }
+
   await UnitSettings.init();
   await ThemeSettings.init();
   await WeatherSettings.init();
@@ -23,8 +12,6 @@ void main() async {
   runApp(const WeatherApp());
 }
 
-// Check if running on web
-const kIsWeb = bool.fromEnvironment('dart.library.js_util');
 
 class WeatherApp extends StatelessWidget {
   const WeatherApp({super.key});

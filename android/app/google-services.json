@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "839225060770",
+    "project_id": "swwsc-weather",
+    "storage_bucket": "swwsc-weather.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:839225060770:android:f53500698d01c0e156d6fb",
+        "android_client_info": {
+          "package_name": "com.steve.weather_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMYC70yneqv2H5M17ssN-_Tfg9WDaZo1E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
